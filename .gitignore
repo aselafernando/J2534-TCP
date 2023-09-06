@@ -1,0 +1,11 @@
+/J2534_TCPServer
+**/.vs
+**/J2534_TCPClient\ Release
+**/J2534_TCPClient\ Debug
+**/J2534_TCPServer\ Release
+**/J2534_TCPServer\ Debug
+*.so
+*.dll
+*.o
+*.exe
+*.sdf

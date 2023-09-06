@@ -1,0 +1,18 @@
+LIBRARY "J2534_TCP.DLL"
+EXPORTS
+	PassThruOpen					@1 PRIVATE
+	PassThruClose					@2 PRIVATE
+	PassThruConnect					@3 PRIVATE
+	PassThruDisconnect				@4 PRIVATE
+	PassThruReadMsgs				@5 PRIVATE
+	PassThruWriteMsgs				@6 PRIVATE
+	PassThruStartPeriodicMsg		@7 PRIVATE
+	PassThruStopPeriodicMsg			@8 PRIVATE
+	PassThruStartMsgFilter			@9 PRIVATE
+	PassThruStopMsgFilter			@10 PRIVATE
+	PassThruSetProgrammingVoltage	@11 PRIVATE
+	PassThruReadVersion				@12 PRIVATE
+	PassThruGetLastError			@13 PRIVATE
+	PassThruIoctl					@14 PRIVATE
+	PassThruReset					@15 PRIVATE
+	PassThruGetLastSocketError		@16 PRIVATE
