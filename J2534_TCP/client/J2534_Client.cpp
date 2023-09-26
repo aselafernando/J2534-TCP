@@ -32,10 +32,12 @@ static void sendData(uint8_t* pData, uint32_t len) {
     uint32_t i;
     int sentLen;
 
-	for(i = 0; i < len; i += sentLen) {
+    for (i = 0; i < len; i += sentLen) {
         sentLen = send(sock, (char*)pData + i, len - i, 0);
-        outfile << "sentLen " << sentLen << endl;
-        outfile.flush();
+        if (doLog) {
+            outfile << "sentLen " << sentLen << endl;
+            outfile.flush();
+        }
         if (sentLen <= 0) {
             break;
         }
@@ -50,14 +52,19 @@ static ReplyPacket* getReply() {
 
 	for(i = 0; i < sizeof(replyLen); i += readLen) {
         readLen = recv(sock, (char*)&replyLen + i, sizeof(replyLen) - i, 0);
-        outfile << "readLen " << readLen << endl;
-        outfile.flush();
+        if (doLog) {
+            outfile << "readLen " << readLen << endl;
+            outfile.flush();
+        }
 		if(readLen <= 0) {
             return NULL;
         }
     }
-    outfile << "replyLen " << replyLen << endl;
-    outfile.flush();
+
+    if (doLog) {
+        outfile << "replyLen " << replyLen << endl;
+        outfile.flush();
+    }
 
 	pReply = (ReplyPacket*)malloc(replyLen);
     if(pReply != NULL) {
@@ -65,8 +72,10 @@ static ReplyPacket* getReply() {
         replyLen -= sizeof(replyLen);
         for(i = 0; i < replyLen; i += readLen) {
             readLen = recv(sock, (char*)pReply + sizeof(replyLen) + i, replyLen - i, 0);
-            outfile << "readLen " << readLen << endl;
-            outfile.flush();
+            if (doLog) {
+                outfile << "readLen " << readLen << endl;
+                outfile.flush();
+            }
 			if(readLen <= 0) {
                 return pReply;
 			}
@@ -77,9 +86,11 @@ static ReplyPacket* getReply() {
 }
 
 static ReplyPacket* sendAndReply(CommandPacket* pCmd) {
-    outfile << "Sending CmdLen: " << pCmd->len << endl;
-    outfile << "Sending Cmd: " << std::to_string(pCmd->cmd) << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "Sending CmdLen: " << pCmd->len << endl;
+        outfile << "Sending Cmd: " << std::to_string(pCmd->cmd) << endl;
+        outfile.flush();
+    }
 
     sendData((uint8_t*)pCmd, pCmd->len);
     return getReply();
@@ -90,39 +101,53 @@ static bool connectToServer() {
     #ifdef _WIN32
         WSADATA wsaData;
         int res = WSAStartup(0x202, &wsaData);
-        outfile << "WSAStartup " << res << endl;
-        outfile.flush();
-	    if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-            outfile << "WSA Error: " << WSAGetLastError() << endl;
+        if (doLog) {
+            outfile << "WSAStartup " << res << endl;
             outfile.flush();
+        }
+	    if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+            if (doLog) {
+                outfile << "WSA Error: " << WSAGetLastError() << endl;
+                outfile.flush();
+            }
             return false;
         }
-        InetPton(AF_INET, _T(SERVER), &ipOfServer.sin_addr.s_addr);
+        InetPtonA(AF_INET, serverAddr.c_str(), &ipOfServer.sin_addr.s_addr);
     #else
         if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-            outfile << "Cannot make socket!" << endl;
-            outfile.flush();
+            if (doLog) {
+                outfile << "Cannot make socket!" << endl;
+                outfile.flush();
+            }
             return false;
         }
-        ipOfServer.sin_addr.s_addr = inet_addr(SERVER);
+        ipOfServer.sin_addr.s_addr = inet_addr(serverAddr.c_str());
     #endif
 	ipOfServer.sin_family = AF_INET;
-    ipOfServer.sin_port = htons(PORT);
-    
-    outfile << "making connection" << endl;
-    outfile.flush();
+    ipOfServer.sin_port = htons(serverPort);
+
+    if (doLog) {
+        outfile << "making connection to " << serverAddr << " on port "  << to_string(serverPort) << endl;
+        outfile.flush();
+    }
 	if(connect(sock, (struct sockaddr *)&ipOfServer, sizeof(ipOfServer)) < 0) {
-        outfile << "connection error" << endl;
+        if (doLog) {
+            outfile << "connection error" << endl;
+        }
         return false;
     }
-    outfile << "connection made" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "connection made" << endl;
+        outfile.flush();
+    }
 	return true;
 }
 
 static void disconnectServer() {
-    outfile << "disconnectServer()" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "disconnectServer()" << endl;
+        outfile.flush();
+    }
     #ifdef _WIN32
         WSACleanup();
         closesocket(sock);
@@ -137,8 +162,14 @@ RETURN_STATUS J2534_API PassThruOpen(char* pName, uint32_t* pDeviceID) {
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = ERR_FAILED;
 
-    outfile << "PassThruOpen()" << endl;
-    outfile.flush();
+#ifndef _WIN32
+    readINI();
+#endif
+
+    if (doLog) {
+        outfile << "PassThruOpen()" << endl;
+        outfile.flush();
+    }
     //*pDeviceID = 10;
     //return 0;
 
@@ -174,10 +205,13 @@ RETURN_STATUS J2534_API PassThruOpen(char* pName, uint32_t* pDeviceID) {
 
     if (pReply != NULL) {
         result = pReply->result;
-        outfile << " = " << std::to_string(pReply->result) << endl;
-        outfile.flush();
+        if (doLog) {
+            outfile << " = " << std::to_string(pReply->result) << endl;
+            outfile.flush();
+        }
         *pDeviceID = *(uint32_t*)(pReply->data);
         free(pReply);
+
         //if (result != RETURN_STATUS::STATUS_NOERROR) {
         //    disconnectServer();
         //}
@@ -191,8 +225,10 @@ RETURN_STATUS J2534_API PassThruStartMsgFilter(uint32_t ChannelID, Filter Filter
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
 
-    outfile << "PassThruStartMsgFilter(ChannelID = " << to_string(ChannelID) << ", FilterType = " << to_string(FilterType) << ")" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "PassThruStartMsgFilter(ChannelID = " << to_string(ChannelID) << ", FilterType = " << to_string(FilterType) << ")" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruStartMsgFilterCmd));
 
@@ -204,8 +240,10 @@ RETURN_STATUS J2534_API PassThruStartMsgFilter(uint32_t ChannelID, Filter Filter
         pCmdData->filterType = FilterType;
         if (pMaskMsg != NULL) {
             memcpy(&(pCmdData->maskMsg), pMaskMsg, sizeof(PASSTHRU_MSG));
-            outfile << "maskMsg: " << endl;
-            printPassThruMsg(&(pCmdData->maskMsg));
+            if (doLog) {
+                outfile << "maskMsg: " << endl;
+                printPassThruMsg(&(pCmdData->maskMsg));
+            }
             //pCmdData->maskMsg = *pMaskMsg;
         }
         else {
@@ -214,16 +252,20 @@ RETURN_STATUS J2534_API PassThruStartMsgFilter(uint32_t ChannelID, Filter Filter
         if (pPatternMsg != NULL) {
             //pCmdData->patternMsg = *pPatternMsg;
             memcpy(&(pCmdData->patternMsg), pPatternMsg, sizeof(PASSTHRU_MSG));
-            outfile << "patternMsg: " << endl;
-            printPassThruMsg(&(pCmdData->patternMsg));
+            if (doLog) {
+                outfile << "patternMsg: " << endl;
+                printPassThruMsg(&(pCmdData->patternMsg));
+            }
         }
         else {
             memset(&(pCmdData->patternMsg), 0, sizeof(PASSTHRU_MSG));
         }
         if (pFlowControlMsg != NULL) {
             memcpy(&(pCmdData->flowControlMsg), pFlowControlMsg, sizeof(PASSTHRU_MSG));
-            outfile << "flowControlMsg: " << endl;
-            printPassThruMsg(&(pCmdData->flowControlMsg));
+            if (doLog) {
+                outfile << "flowControlMsg: " << endl;
+                printPassThruMsg(&(pCmdData->flowControlMsg));
+            }
             //pCmdData->flowControlMsg = *pFlowControlMsg;
         }
         else {
@@ -236,8 +278,10 @@ RETURN_STATUS J2534_API PassThruStartMsgFilter(uint32_t ChannelID, Filter Filter
     if (pReply != NULL) {
         result = pReply->result;
         *pMsgID = *(uint32_t*)(pReply->data);
-        outfile << "MsgID: " << to_string(*pMsgID) << endl;
-        outfile.flush();
+        if (doLog) {
+            outfile << "MsgID: " << to_string(*pMsgID) << endl;
+            outfile.flush();
+        }
         free(pReply);
     }
 
@@ -249,8 +293,10 @@ RETURN_STATUS J2534_API PassThruStopMsgFilter(uint32_t ChannelID, uint32_t MsgID
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
     
-    outfile << "PassThruStopMsgFilter(" << to_string(ChannelID) << "," << to_string(MsgID) << ")" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "PassThruStopMsgFilter(" << to_string(ChannelID) << "," << to_string(MsgID) << ")" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruStopMsgFilterCmd));
 
@@ -330,8 +376,10 @@ RETURN_STATUS J2534_API PassThruGetLastError(char* pErrorDescription) {
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
 
-    outfile << "PassThruGetLastError()" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "PassThruGetLastError()" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket));
     if (pCmd != NULL) {
@@ -347,8 +395,10 @@ RETURN_STATUS J2534_API PassThruGetLastError(char* pErrorDescription) {
         if(pErrorDescription != NULL)
             memcpy(pErrorDescription, (char*)(pReply->data), sizeof(PassThruGetLastErrorReply));
 
-        outfile << "PassThruGetLastError(" << pErrorDescription << ") = " << std::to_string(result) << endl;
-        outfile.flush();
+        if (doLog) {
+            outfile << "PassThruGetLastError(" << pErrorDescription << ") = " << std::to_string(result) << endl;
+            outfile.flush();
+        }
 
         free(pReply);
     }
@@ -413,8 +463,10 @@ RETURN_STATUS J2534_API PassThruConnect(uint32_t DeviceID, ProtocolID ProtocolID
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
 
-    outfile << "PassThruConnect(" << std::to_string(DeviceID) << "," << std::to_string(ProtocolID) << "," << std::to_string(Flags) << "," << std::to_string(BaudRate) << ")" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "PassThruConnect(" << std::to_string(DeviceID) << "," << std::to_string(ProtocolID) << "," << std::to_string(Flags) << "," << std::to_string(BaudRate) << ")" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruConnectCmd));
     if (pCmd != NULL) {
@@ -431,8 +483,10 @@ RETURN_STATUS J2534_API PassThruConnect(uint32_t DeviceID, ProtocolID ProtocolID
 
     if (pReply != NULL) {
         result = pReply->result;
-        outfile << " = " << std::to_string(result) << endl;
-        outfile.flush();
+        if (doLog) {
+            outfile << " = " << std::to_string(result) << endl;
+            outfile.flush();
+        }
         *pChannelID = *(uint32_t*)(pReply->data);
         free(pReply);
     }
@@ -469,6 +523,11 @@ RETURN_STATUS J2534_API PassThruClose(uint32_t deviceID) {
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
 
+    if (doLog) {
+        outfile << "PassThruClose(" << to_string(deviceID) << ")" << endl;
+        outfile.flush();
+    }
+
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruCloseCmd));
 
     if (pCmd != NULL) {
@@ -496,6 +555,11 @@ RETURN_STATUS J2534_API PassThruReadMsgs(uint32_t ChannelID, PASSTHRU_MSG *pMsg,
     CommandPacket *pCmd = NULL;
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
+
+    if (doLog) {
+        outfile << "PassThruReadMsgs(" << to_string(ChannelID) << ")" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruReadMsgsCmd));
 
@@ -527,8 +591,12 @@ RETURN_STATUS J2534_API PassThruWriteMsgs(uint32_t ChannelID, PASSTHRU_MSG *pMsg
     CommandPacket *pCmd = NULL;
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
-    outfile << "PassThruWriteMsgs(" << to_string(ChannelID) << "," << to_string(*pNumMsgs) << "," << to_string(Timeout) << ")" << endl;
-    //printPassThruMsg(pMsg);
+
+    if (doLog) {
+        outfile << "PassThruWriteMsgs(" << to_string(ChannelID) << "," << to_string(*pNumMsgs) << "," << to_string(Timeout) << ")" << endl;
+        printPassThruMsg(pMsg);
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruWriteMsgsCmd));
 
@@ -549,8 +617,11 @@ RETURN_STATUS J2534_API PassThruWriteMsgs(uint32_t ChannelID, PASSTHRU_MSG *pMsg
         result = pReply->result;
         //PassThruWriteMsgsReply* pReplyData = (PassThruWriteMsgsReply*)(pReply->data);
         *pNumMsgs = *(uint32_t*)(pReply->data);
-        outfile << "= " << to_string(result) << endl;
-        outfile << "NumMsgs: " << to_string(*pNumMsgs) << endl;
+        if (doLog) {
+            outfile << "= " << to_string(result) << endl;
+            outfile << "NumMsgs: " << to_string(*pNumMsgs) << endl;
+            outfile.flush();
+        }
         free(pReply);
     }
 
@@ -561,6 +632,11 @@ RETURN_STATUS J2534_API PassThruStartPeriodicMsg(uint32_t ChannelID, PASSTHRU_MS
     CommandPacket *pCmd = NULL;
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
+
+    if (doLog) {
+        outfile << "PassThruStartPeriodicMsg(" << to_string(ChannelID) << ")" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruStartPeriodicMsgCmd));
 
@@ -588,6 +664,11 @@ RETURN_STATUS J2534_API PassThruStopPeriodicMsg(uint32_t ChannelID, uint32_t Msg
     CommandPacket *pCmd = NULL;
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
+
+    if (doLog) {
+        outfile << "PassThruStopPeriodicMsg(" << to_string(ChannelID) << "," << to_string(MsgID) << ")" << endl;
+        outfile.flush();
+    }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruStopPeriodicMsgCmd));
 
@@ -617,8 +698,10 @@ RETURN_STATUS J2534_API PassThruIoctl(uint32_t ChannelID, IOCTL_ID IoctlID, void
     //Placeholder pointers
     SCONFIG_LIST* pSConfigList = NULL;
     SBYTE_ARRAY* pSByteArray = NULL;
-    outfile << "PassThruIoctl(" << to_string(ChannelID) << "," << to_string(IoctlID) << ")" << endl;
-    outfile.flush();
+    if (doLog) {
+        outfile << "PassThruIoctl(" << to_string(ChannelID) << "," << to_string(IoctlID) << ")" << endl;
+        outfile.flush();
+    }
 
     switch (IoctlID) {
     case IOCTL_ID::GET_CONFIG:
@@ -627,8 +710,10 @@ RETURN_STATUS J2534_API PassThruIoctl(uint32_t ChannelID, IOCTL_ID IoctlID, void
         //pOutput = NULL
         pSConfigList = (SCONFIG_LIST*)pInput;
         cmdDataLen = sizeof(pSConfigList->NumOfParams) + (pSConfigList->NumOfParams * sizeof(SCONFIG));
-        outfile << "pInput:" << endl;
-        print_SCONFIG_LIST(pSConfigList);
+        if (doLog) {
+            outfile << "pInput:" << endl;
+            print_SCONFIG_LIST(pSConfigList);
+        }
 
         break;
     case IOCTL_ID::READ_VBATT:
@@ -646,8 +731,10 @@ RETURN_STATUS J2534_API PassThruIoctl(uint32_t ChannelID, IOCTL_ID IoctlID, void
         //pInput = PASSTHRU_MSG*
         //pOutput = PASSTHRU_MSG*
         cmdDataLen = sizeof(PASSTHRU_MSG);
-        outfile << "pInput:" << endl;
-        printPassThruMsg((PASSTHRU_MSG*)&pInput);
+        if (doLog) {
+            outfile << "pInput:" << endl;
+            printPassThruMsg((PASSTHRU_MSG*)&pInput);
+        }
         break;
     case IOCTL_ID::CLEAR_TX_BUFFER:
     case IOCTL_ID::CLEAR_RX_BUFFER:

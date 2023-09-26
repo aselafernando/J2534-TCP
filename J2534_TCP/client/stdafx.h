@@ -33,5 +33,11 @@ using namespace std;
 #include "J2534_V0404.h"
 #include "J2534_TCPIP.h"
 #include "J2534_Client.h"
+#include "ini.h"
 
 extern std::ofstream outfile;
+extern bool doLog;
+extern std::string serverAddr;
+extern int serverPort;
+
+extern void readINI();

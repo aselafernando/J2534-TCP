@@ -51,6 +51,9 @@
     <ClInclude Include="server\J2534_Server.h">
       <Filter>Header Files\server</Filter>
     </ClInclude>
+    <ClInclude Include="client\ini.h">
+      <Filter>Header Files\client</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="client\dllmain.cpp">

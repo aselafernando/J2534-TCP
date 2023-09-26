@@ -6,9 +6,6 @@
 #include <stdint.h>
 #include "J2534_V0404.h"
 
-#define SERVER "127.0.0.1"
-#define PORT 2534
-
 #if defined(_WIN32)
 	//  Microsoft 
 	#define EXPORTED __declspec(dllexport) RETURN_STATUS J2534_API
