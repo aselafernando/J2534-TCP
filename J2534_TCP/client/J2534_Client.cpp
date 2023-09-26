@@ -796,13 +796,15 @@ RETURN_STATUS J2534_API PassThruIoctl(uint32_t ChannelID, IOCTL_ID IoctlID, void
                 memcpy((uint8_t*)(pSByteArray->BytePtr), pReply->data + sizeof(pSByteArray->NumOfBytes), pSByteArray->NumOfBytes);
                 break;
             case IOCTL_ID::FAST_INIT:
-                memcpy(pOutput, pReply->data, sizeof(PASSTHRU_MSG));
-                outfile << "pOutput:" << endl;
-                printPassThruMsg((PASSTHRU_MSG*)&(pReply->data));
+                memcpy((uint8_t*)pOutput, pReply->data, sizeof(PASSTHRU_MSG));
+                if (doLog) {
+                    outfile << "pOutput:" << endl;
+                    printPassThruMsg((PASSTHRU_MSG*)&(pReply->data));
+                }
                 break;
             case IOCTL_ID::READ_VBATT:
             case IOCTL_ID::READ_PROG_VOLTAGE:
-                memcpy(pOutput, pReply->data, sizeof(uint32_t));
+                memcpy((uint8_t*)pOutput, pReply->data, sizeof(uint32_t));
                 break;
             default:
                 break;
