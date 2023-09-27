@@ -36,6 +36,8 @@ BOOL WINAPI ConsoleHandler(
 );
 #endif
 static bool stopServer = false;
+bool verbose = false;
+static bool memoryLeakMode = false;
 
 using namespace std;
 
@@ -52,7 +54,7 @@ int main(int argc, char* argv[])
 	int listenPort = LISTEN_PORT;
 	int c;
 
-	while ((c = getopt(argc, argv, "l:p:")) != -1)
+	while ((c = getopt(argc, argv, "l:p:mv")) != -1)
 	{
 		switch (c)
 		{
@@ -63,6 +65,16 @@ int main(int argc, char* argv[])
 				if (optarg != NULL) {
 					listenPort = atoi(optarg);
 				}
+				break;
+			case 'v':
+				verbose = true;
+				fprintf(stdout, "Verbose active\n");
+				break;
+			case 'm':
+				memoryLeakMode = true;
+				fprintf(stdout, "Memory Leak Mode active\n");
+				//Single threaded, exit after disconnect to free memory
+				//Useful if DLL has memory leaks ie MVCI32.dll
 				break;
 		}
 	}
@@ -118,7 +130,12 @@ int main(int argc, char* argv[])
 		SOCKET client;
 		if ((client = accept(server, reinterpret_cast<sockaddr*>(&client_addr), &client_addr_size)) != INVALID_SOCKET)
 		{
-			auto fut = async(launch::async, on_client_connect, client);
+			if (memoryLeakMode) {
+				on_client_connect(client);
+				stopServer = true; //terminate after client because of memory leaks in the DLL
+			} else {
+				auto fut = async(launch::async, on_client_connect, client);
+			}
 		}
 #ifdef _WIN32
 		const auto last_error = WSAGetLastError();
@@ -130,9 +147,18 @@ int main(int argc, char* argv[])
 #endif
 	}
 
-	fprintf(stdout, "Unloading J2534 library\n");
+#ifdef _WIN32
+	closesocket(server);
+#else
+	close(server);
+#endif
 
+	fprintf(stdout, "Server stopped listening\n");
+
+	fprintf(stdout, "Unloading J2534 library\n");
 	unloadDLL();
+
+	fprintf(stdout, "Exiting..\n");
 	return 0;
 }
 
@@ -158,7 +184,8 @@ void on_client_connect(SOCKET client)
 
 		for (i = 0; i < sizeof(buffLen); i += readLen) {
 			readLen = recv(client, (char*)&buffLen, sizeof(buffLen) - i, 0);
-			fprintf(stdout, "Read %d bytes\n", readLen);
+			if(verbose)
+				fprintf(stdout, "Read %d bytes\n", readLen);
 
 			if (readLen <= 0) {
 #ifdef _WIN32
@@ -168,14 +195,16 @@ void on_client_connect(SOCKET client)
 			}
 		}
 
-		fprintf(stdout, "Command Length = %d bytes \n", buffLen);
+		if (verbose)
+			fprintf(stdout, "Command Length = %d bytes \n", buffLen);
 
 		if ((cmd = (CommandPacket*)malloc(sizeof(uint8_t) * buffLen)) != NULL) {
 			cmd->len = buffLen;
 			buffLen -= sizeof(buffLen); //we already read bytes for the length
 			for (i = 0; i < buffLen; i += readLen) {
 				readLen = recv(client, (char*)cmd + sizeof(buffLen) + i, buffLen - i, 0);
-				fprintf(stdout, "Read %d bytes\n", readLen);
+				if (verbose)
+					fprintf(stdout, "Read %d bytes\n", readLen);
 				if (readLen <= 0) {
 #ifdef _WIN32
 					fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
@@ -187,11 +216,13 @@ void on_client_connect(SOCKET client)
 			reply = processCommand(cmd);
 
 			if (reply != NULL) {
-				fprintf(stdout, "reply result = %d\n", reply->result);
+				if (verbose)
+					fprintf(stdout, "reply result = %d\n", reply->result);
 
 				for (i = 0; i < reply->len; i += sentLen) {
 					sentLen = send(client, (char*)reply + i, reply->len - i, 0);
-					fprintf(stdout, "sentLen %d\n", sentLen);
+					if (verbose)
+						fprintf(stdout, "sentLen %d\n", sentLen);
 					if (sentLen <= 0) {
 #ifdef _WIN32
 						fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
@@ -199,8 +230,8 @@ void on_client_connect(SOCKET client)
 						goto disconnect;
 					}
 				}
-
-				fprintf(stdout, "sent reply\n");
+				if (verbose)
+					fprintf(stdout, "sent reply\n");
 
 				/*if ((reply->cmd == J2534_Command::OPEN &&
 					reply->result != RETURN_STATUS::STATUS_NOERROR) ||

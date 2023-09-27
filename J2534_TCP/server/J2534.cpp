@@ -188,30 +188,32 @@ int loadDLL() {
 }
 
 bool unloadDLL() {
+    if (hJ2534) {
 #ifdef _WIN32
-    if (FreeLibrary(hJ2534))
+        if (FreeLibrary(hJ2534))
 #else
-    if(dlclose(hJ2534) == 0)
+        if (dlclose(hJ2534) == 0)
 #endif
-    {
-        PassThruConnect = NULL;
-        PassThruDisconnect = NULL;
-        PassThruReadMsgs = NULL;
-        PassThruWriteMsgs = NULL;
-        PassThruStartPeriodicMsg = NULL;
-        PassThruStopPeriodicMsg = NULL;
-        PassThruStartMsgFilter = NULL;
-        PassThruStopMsgFilter = NULL;
-        PassThruSetProgrammingVoltage = NULL;
-        PassThruReadVersion = NULL;
-        PassThruGetLastError = NULL;
-        PassThruIoctl = NULL;
-        PassThruOpen = NULL;
-        PassThruClose = NULL;
-        PassThruReset = NULL;
-        PassThruGetLastSocketError = NULL;
-        hJ2534 = NULL;
-        return true;
+        {
+            PassThruConnect = NULL;
+            PassThruDisconnect = NULL;
+            PassThruReadMsgs = NULL;
+            PassThruWriteMsgs = NULL;
+            PassThruStartPeriodicMsg = NULL;
+            PassThruStopPeriodicMsg = NULL;
+            PassThruStartMsgFilter = NULL;
+            PassThruStopMsgFilter = NULL;
+            PassThruSetProgrammingVoltage = NULL;
+            PassThruReadVersion = NULL;
+            PassThruGetLastError = NULL;
+            PassThruIoctl = NULL;
+            PassThruOpen = NULL;
+            PassThruClose = NULL;
+            PassThruReset = NULL;
+            PassThruGetLastSocketError = NULL;
+            hJ2534 = NULL;
+            return true;
+        }
     }
 
     return false;

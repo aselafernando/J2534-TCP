@@ -5,6 +5,8 @@
 #include "J2534_Server.h"
 #include "J2534.h"
 
+extern bool verbose;
+
 void printSCONFIG_LIST(SCONFIG_LIST* list) {
 	uint32_t i;
 	if (list != NULL) {
@@ -54,7 +56,9 @@ void printPassThruMsg(PASSTHRU_MSG* msg) {
 
 ReplyPacket* Server_PassThruOpen(char* name) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruOpen()\n");
+
+	if (verbose)
+		fprintf(stdout, "PassThruOpen()\n");
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruOpenReply));
 	if (pReply != NULL) {
@@ -65,7 +69,8 @@ ReplyPacket* Server_PassThruOpen(char* name) {
 		pReply->result = PassThruOpen(NULL, (uint32_t*)(pReply->data));
 
 		if (pReply->result == RETURN_STATUS::STATUS_NOERROR) {
-			fprintf(stdout, "deviceID = %d\n", *(uint32_t*)(pReply->data));
+			if (verbose)
+				fprintf(stdout, "deviceID = %d\n", *(uint32_t*)(pReply->data));
 		}
 	}
 	return pReply;
@@ -73,7 +78,8 @@ ReplyPacket* Server_PassThruOpen(char* name) {
 
 ReplyPacket* Server_PassThruClose(uint32_t* deviceID) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruClose(%d)\n", *deviceID);
+	if (verbose)
+		fprintf(stdout, "PassThruClose(%d)\n", *deviceID);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket));
 	if (pReply != NULL) {
@@ -88,7 +94,8 @@ ReplyPacket* Server_PassThruReadMsgs(PassThruReadMsgsCmd* readMsgsCmd) {
 	ReplyPacket* pReply = NULL;
 	uint32_t i = 0;
 
-	fprintf(stdout, "PassThruReadMsgs(%d, %d, %d)\n", readMsgsCmd->channelID, readMsgsCmd->numMsgs, readMsgsCmd->timeout);
+	if (verbose)
+		fprintf(stdout, "PassThruReadMsgs(%d, %d, %d)\n", readMsgsCmd->channelID, readMsgsCmd->numMsgs, readMsgsCmd->timeout);
 
 	size_t pReplyDataLen = sizeof(PassThruReadMsgsReply) + (readMsgsCmd->numMsgs * sizeof(PASSTHRU_MSG));
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + pReplyDataLen);
@@ -106,10 +113,13 @@ ReplyPacket* Server_PassThruReadMsgs(PassThruReadMsgsCmd* readMsgsCmd) {
 
 		pReply->result = PassThruReadMsgs(readMsgsCmd->channelID, readMsgsReply->msgs,
 			&(readMsgsReply->numMsgs), readMsgsCmd->timeout);
+		
+		if (verbose) {
+			fprintf(stdout, "numMsgs = %d\n", readMsgsReply->numMsgs);
 
-		fprintf(stdout, "numMsgs = %d\n", readMsgsReply->numMsgs);
-		for (i = 0; i < readMsgsReply->numMsgs; i++) {
-			printPassThruMsg((PASSTHRU_MSG*)((uint8_t*)(readMsgsReply->msgs) + (sizeof(PASSTHRU_MSG) * i)));
+			for (i = 0; i < readMsgsReply->numMsgs; i++) {
+				printPassThruMsg((PASSTHRU_MSG*)((uint8_t*)(readMsgsReply->msgs) + (sizeof(PASSTHRU_MSG) * i)));
+			}
 		}
 
 		pReply->len = sizeof(ReplyPacket) + sizeof(PassThruReadMsgsReply) +
@@ -122,9 +132,11 @@ ReplyPacket* Server_PassThruWriteMsgs(PassThruWriteMsgsCmd* msgsCmd) {
 	ReplyPacket* pReply = NULL;
 	uint32_t i = 0;
 
-	fprintf(stdout, "PassThruWriteMsgs(%d, %d, %d)\n", msgsCmd->channelID, msgsCmd->timeout, msgsCmd->numMsgs);
-	for (i = 0; i < msgsCmd->numMsgs; i++) {
-		printPassThruMsg((PASSTHRU_MSG*)((uint8_t*)(msgsCmd->msgs) + (sizeof(PASSTHRU_MSG) * i)));
+	if (verbose) {
+		fprintf(stdout, "PassThruWriteMsgs(%d, %d, %d)\n", msgsCmd->channelID, msgsCmd->timeout, msgsCmd->numMsgs);
+		for (i = 0; i < msgsCmd->numMsgs; i++) {
+			printPassThruMsg((PASSTHRU_MSG*)((uint8_t*)(msgsCmd->msgs) + (sizeof(PASSTHRU_MSG) * i)));
+		}
 	}
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruWriteMsgsReply));
@@ -137,14 +149,17 @@ ReplyPacket* Server_PassThruWriteMsgs(PassThruWriteMsgsCmd* msgsCmd) {
 		memcpy(pReply->data, &(msgsCmd->numMsgs), sizeof(uint32_t));
 		pReply->result = PassThruWriteMsgs(msgsCmd->channelID, msgsCmd->msgs,
 			(uint32_t*)(pReply->data), msgsCmd->timeout);
-		fprintf(stdout, "numMsgs = %d\n", *(uint32_t*)(pReply->data));
+		if (verbose)
+			fprintf(stdout, "numMsgs = %d\n", *(uint32_t*)(pReply->data));
 	}
 	return pReply;
 }
 
 ReplyPacket* Server_PassThruConnect(PassThruConnectCmd* connectCmd) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruConnect(%d, %d, %d, %d)\n", connectCmd->deviceID, connectCmd->protocolID, connectCmd->flags, connectCmd->baudRate);
+	
+	if (verbose)
+		fprintf(stdout, "PassThruConnect(%d, %d, %d, %d)\n", connectCmd->deviceID, connectCmd->protocolID, connectCmd->flags, connectCmd->baudRate);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruConnectReply));
 	if (pReply != NULL) {
@@ -152,7 +167,8 @@ ReplyPacket* Server_PassThruConnect(PassThruConnectCmd* connectCmd) {
 		pReply->cmd = J2534_Command::CONNECT;
 		pReply->len = sizeof(ReplyPacket) + sizeof(PassThruConnectReply);
 		pReply->result = PassThruConnect(connectCmd->deviceID, connectCmd->protocolID, connectCmd->flags, connectCmd->baudRate, (uint32_t*)(pReply->data));
-		fprintf(stdout, "channelID = %d\n", *(uint32_t*)(pReply->data));
+		if (verbose)
+			fprintf(stdout, "channelID = %d\n", *(uint32_t*)(pReply->data));
 	}
 
 	return pReply;
@@ -160,7 +176,9 @@ ReplyPacket* Server_PassThruConnect(PassThruConnectCmd* connectCmd) {
 
 ReplyPacket* Server_PassThruDisconnect(uint32_t* channelID) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruDisconnect(%d)\n", *channelID);
+
+	if (verbose)
+		fprintf(stdout, "PassThruDisconnect(%d)\n", *channelID);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket));
 	if (pReply != NULL) {
@@ -174,7 +192,9 @@ ReplyPacket* Server_PassThruDisconnect(uint32_t* channelID) {
 
 ReplyPacket* Server_PassThruReset() {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruReset()\n");
+
+	if (verbose)
+		fprintf(stdout,	"PassThruReset()\n");
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket));
 	if (pReply != NULL) {
@@ -188,7 +208,9 @@ ReplyPacket* Server_PassThruReset() {
 
 ReplyPacket* Server_PassThruReadVersion(uint32_t* deviceID) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruReadVersion(%d)\n", *deviceID);
+
+	if (verbose)
+		fprintf(stdout, "PassThruReadVersion(%d)\n", *deviceID);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruReadVersionReply));
 
@@ -206,10 +228,12 @@ ReplyPacket* Server_PassThruReadVersion(uint32_t* deviceID) {
 
 
 		if (pReply->result == RETURN_STATUS::STATUS_NOERROR) {
-			fprintf(stdout, "Firmware Version: %s\nDLL Version: %s\nAPI Version: %s\n",
-				readVersionReply->firmwareVersion,
-				readVersionReply->dllVersion,
-				readVersionReply->apiVersion);
+			if (verbose) {
+				fprintf(stdout, "Firmware Version: %s\nDLL Version: %s\nAPI Version: %s\n",
+					readVersionReply->firmwareVersion,
+					readVersionReply->dllVersion,
+					readVersionReply->apiVersion);
+			}
 		}
 		else {
 			memset(readVersionReply->firmwareVersion, 0, 80);
@@ -223,7 +247,9 @@ ReplyPacket* Server_PassThruReadVersion(uint32_t* deviceID) {
 
 ReplyPacket* Server_PassThruStartMsgFilter(PassThruStartMsgFilterCmd* msgFilterCmd) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruStartMsgFilter(channelID = %d, filterType = %d)\n", msgFilterCmd->channelID, msgFilterCmd->filterType);
+
+	if (verbose)
+		fprintf(stdout, "PassThruStartMsgFilter(channelID = %d, filterType = %d)\n", msgFilterCmd->channelID, msgFilterCmd->filterType);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruStartMsgFilterReply));
 
@@ -232,22 +258,27 @@ ReplyPacket* Server_PassThruStartMsgFilter(PassThruStartMsgFilterCmd* msgFilterC
 		pReply->cmd = J2534_Command::START_MSG_FILTER;
 		pReply->len = sizeof(ReplyPacket) + sizeof(PassThruStartMsgFilterReply);
 		if (msgFilterCmd->filterType == Filter::FLOW_CONTROL_FILTER) {
-			fprintf(stdout, "maskMsg\n");
-			printPassThruMsg(&(msgFilterCmd->maskMsg));
-			fprintf(stdout, "patternMsg\n");
-			printPassThruMsg(&(msgFilterCmd->patternMsg));
-			fprintf(stdout, "flowControlMsg\n");
-			printPassThruMsg(&(msgFilterCmd->flowControlMsg));
+
+			if (verbose) {
+				fprintf(stdout, "maskMsg\n");
+				printPassThruMsg(&(msgFilterCmd->maskMsg));
+				fprintf(stdout, "patternMsg\n");
+				printPassThruMsg(&(msgFilterCmd->patternMsg));
+				fprintf(stdout, "flowControlMsg\n");
+				printPassThruMsg(&(msgFilterCmd->flowControlMsg));
+			}
 
 			pReply->result = PassThruStartMsgFilter(msgFilterCmd->channelID, msgFilterCmd->filterType,
 				&(msgFilterCmd->maskMsg), &(msgFilterCmd->patternMsg), &(msgFilterCmd->flowControlMsg),
 				(uint32_t*)(pReply->data));
 		}
 		else {
-			fprintf(stdout, "maskMsg\n");
-			printPassThruMsg(&(msgFilterCmd->maskMsg));
-			fprintf(stdout, "patternMsg\n");
-			printPassThruMsg(&(msgFilterCmd->patternMsg));
+			if (verbose) {
+				fprintf(stdout, "maskMsg\n");
+				printPassThruMsg(&(msgFilterCmd->maskMsg));
+				fprintf(stdout, "patternMsg\n");
+				printPassThruMsg(&(msgFilterCmd->patternMsg));
+			}
 			pReply->result = PassThruStartMsgFilter(msgFilterCmd->channelID, msgFilterCmd->filterType,
 				&(msgFilterCmd->maskMsg), &(msgFilterCmd->patternMsg), NULL,
 				(uint32_t*)(pReply->data));
@@ -274,7 +305,9 @@ ReplyPacket* Server_PassThruStopMsgFilter(PassThruStopMsgFilterCmd* msgFilterCmd
 
 ReplyPacket* Server_PassThruSetProgrammingVoltage(PassThruSetProgrammingVoltageCmd* prgCmd) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruSetProgrammingVoltage(%d, %d, %d)\n", prgCmd->deviceID, prgCmd->pinNumber, prgCmd->voltage);
+
+	if (verbose)
+		fprintf(stdout, "PassThruSetProgrammingVoltage(%d, %d, %d)\n", prgCmd->deviceID, prgCmd->pinNumber, prgCmd->voltage);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket));
 
@@ -289,7 +322,9 @@ ReplyPacket* Server_PassThruSetProgrammingVoltage(PassThruSetProgrammingVoltageC
 
 ReplyPacket* Server_PassThruGetLastError() {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruGetLastError()\n");
+
+	if (verbose)
+		fprintf(stdout, "PassThruGetLastError()\n");
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruGetLastErrorReply));
 
@@ -298,15 +333,17 @@ ReplyPacket* Server_PassThruGetLastError() {
 		pReply->cmd = J2534_Command::GET_LAST_ERROR;
 		pReply->len = sizeof(ReplyPacket) + sizeof(PassThruGetLastErrorReply);
 		pReply->result = PassThruGetLastError((char*)(pReply->data));
-		
-		fprintf(stdout, "error = %s\n", (char*)(pReply->data));
+		if (verbose)
+			fprintf(stdout, "error = %s\n", (char*)(pReply->data));
 	}
 	return pReply;
 }
 
 ReplyPacket* Server_PassThruGetLastSocketError() {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruGetLastSocketError()\n");
+
+	if (verbose)
+		fprintf(stdout, "PassThruGetLastSocketError()\n");
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) + sizeof(PassThruGetLastSocketErrorReply));
 
@@ -315,15 +352,17 @@ ReplyPacket* Server_PassThruGetLastSocketError() {
 		pReply->cmd = J2534_Command::GET_LAST_SOCKET_ERROR;
 		pReply->len = sizeof(ReplyPacket) + sizeof(PassThruGetLastSocketErrorReply);
 		pReply->result = PassThruGetLastSocketError((char*)(pReply->data));
-		
-		fprintf(stdout, "error = %s\n", (char*)(pReply->data));
+		if (verbose)
+			fprintf(stdout, "error = %s\n", (char*)(pReply->data));
 	}
 	return pReply;
 }
 
 ReplyPacket* Server_PassThruStartPeriodicMsg(PassThruStartPeriodicMsgCmd* msgCmd) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruStartPeriodicMsg(%d, %d)\n", msgCmd->channelID, msgCmd->timeInterval);
+
+	if (verbose)
+		fprintf(stdout, "PassThruStartPeriodicMsg(%d, %d)\n", msgCmd->channelID, msgCmd->timeInterval);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket) +
 		sizeof(PassThruStartPeriodicMsgReply));
@@ -333,15 +372,17 @@ ReplyPacket* Server_PassThruStartPeriodicMsg(PassThruStartPeriodicMsgCmd* msgCmd
 		pReply->cmd = J2534_Command::START_PERIODIC_MSG;
 		pReply->len = sizeof(ReplyPacket) + sizeof(PassThruStartPeriodicMsgReply);
 		pReply->result = PassThruStartPeriodicMsg(msgCmd->channelID, &(msgCmd->msg), (uint32_t*)(pReply->data), msgCmd->timeInterval);
-		
-		fprintf(stdout, "msgID = %d\n", *(uint32_t*)(pReply->data));
+		if (verbose)
+			fprintf(stdout, "msgID = %d\n", *(uint32_t*)(pReply->data));
 	}
 	return pReply;
 }
 
 ReplyPacket* Server_PassThruStopPeriodicMsg(PassThruStopPeriodicMsgCmd* msgCmd) {
 	ReplyPacket* pReply = NULL;
-	fprintf(stdout, "PassThruStopPeriodicMsg(%d, %d)\n", msgCmd->channelID, msgCmd->msgID);
+
+	if (verbose)
+		fprintf(stdout, "PassThruStopPeriodicMsg(%d, %d)\n", msgCmd->channelID, msgCmd->msgID);
 
 	pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket));
 
@@ -362,7 +403,8 @@ ReplyPacket* Server_PassThruIoctl(PassThruIoctlCmd* pData) {
 	SBYTE_ARRAY inputSBA;
 	SBYTE_ARRAY outputSBA;
 
-	fprintf(stdout, "PassThruIoctl(%d, %d)\n", pData->channelID, pData->ioctlID);
+	if (verbose)
+		fprintf(stdout, "PassThruIoctl(%d, %d)\n", pData->channelID, pData->ioctlID);
 
 	switch (pData->ioctlID) {
 		case IOCTL_ID::GET_CONFIG:
@@ -385,8 +427,10 @@ ReplyPacket* Server_PassThruIoctl(PassThruIoctlCmd* pData) {
 			pOutput = NULL;
 			pReply = (ReplyPacket*)malloc(sizeof(ReplyPacket));
 			pReply->len = sizeof(ReplyPacket);
-			fprintf(stdout, "pInput:\n");
-			printSCONFIG_LIST(&inputSCL);
+			if (verbose) {
+				fprintf(stdout, "pInput:\n");
+				printSCONFIG_LIST(&inputSCL);
+			}
 			break;
 		case IOCTL_ID::READ_VBATT:
 		case IOCTL_ID::READ_PROG_VOLTAGE:
@@ -502,7 +546,7 @@ ReplyPacket* processCommand(CommandPacket* cmd) {
 		case J2534_Command::GET_LAST_SOCKET_ERROR:
 			return Server_PassThruGetLastSocketError();
 		default:
-			fprintf(stdout, "Got Unknown Command %d\n", cmd->cmd);
+			fprintf(stderr, "Got Unknown Command %d\n", cmd->cmd);
 			break;
 	}
 
