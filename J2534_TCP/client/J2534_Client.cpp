@@ -47,16 +47,16 @@ static void sendData(uint8_t* pData, uint32_t len) {
 static ReplyPacket* getReply() {
     uint32_t i;
     int readLen;
-	uint32_t replyLen;
-	ReplyPacket* pReply = NULL;
+    uint32_t replyLen;
+    ReplyPacket* pReply = NULL;
 
-	for(i = 0; i < sizeof(replyLen); i += readLen) {
+    for(i = 0; i < sizeof(replyLen); i += readLen) {
         readLen = recv(sock, (char*)&replyLen + i, sizeof(replyLen) - i, 0);
         if (doLog) {
             outfile << "readLen " << readLen << endl;
             outfile.flush();
         }
-		if(readLen <= 0) {
+        if(readLen <= 0) {
             return NULL;
         }
     }
@@ -66,7 +66,7 @@ static ReplyPacket* getReply() {
         outfile.flush();
     }
 
-	pReply = (ReplyPacket*)malloc(replyLen);
+    pReply = (ReplyPacket*)malloc(replyLen);
     if(pReply != NULL) {
         pReply->len = replyLen;
         replyLen -= sizeof(replyLen);
@@ -76,12 +76,12 @@ static ReplyPacket* getReply() {
                 outfile << "readLen " << readLen << endl;
                 outfile.flush();
             }
-			if(readLen <= 0) {
+            if(readLen <= 0) {
                 return pReply;
-			}
+            }
         }
     }
-    
+
     return pReply;
 }
 
@@ -96,65 +96,67 @@ static ReplyPacket* sendAndReply(CommandPacket* pCmd) {
     return getReply();
 }
 
-static bool connectToServer() {
-    struct sockaddr_in ipOfServer;
-    #ifdef _WIN32
-        WSADATA wsaData;
-        int res = WSAStartup(0x202, &wsaData);
-        if (doLog) {
-            outfile << "WSAStartup " << res << endl;
-            outfile.flush();
-        }
-	    if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-            if (doLog) {
-                outfile << "WSA Error: " << WSAGetLastError() << endl;
-                outfile.flush();
-            }
-            return false;
-        }
-        InetPtonA(AF_INET, serverAddr.c_str(), &ipOfServer.sin_addr.s_addr);
-    #else
-        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-            if (doLog) {
-                outfile << "Cannot make socket!" << endl;
-                outfile.flush();
-            }
-            return false;
-        }
-        ipOfServer.sin_addr.s_addr = inet_addr(serverAddr.c_str());
-    #endif
-	ipOfServer.sin_family = AF_INET;
-    ipOfServer.sin_port = htons(serverPort);
-
-    if (doLog) {
-        outfile << "making connection to " << serverAddr << " on port "  << to_string(serverPort) << endl;
-        outfile.flush();
-    }
-	if(connect(sock, (struct sockaddr *)&ipOfServer, sizeof(ipOfServer)) < 0) {
-        if (doLog) {
-            outfile << "connection error" << endl;
-        }
-        return false;
-    }
-    if (doLog) {
-        outfile << "connection made" << endl;
-        outfile.flush();
-    }
-	return true;
-}
-
 static void disconnectServer() {
     if (doLog) {
         outfile << "disconnectServer()" << endl;
         outfile.flush();
     }
     #ifdef _WIN32
-        WSACleanup();
-        closesocket(sock);
-    #else
-        close(sock);
-    #endif
+    WSACleanup();
+    closesocket(sock);
+    #else //_WIN32
+    close(sock);
+    #endif //_WIN32
     sock = INVALID_SOCKET;
+}
+
+static bool connectToServer() {
+    struct sockaddr_in ipOfServer;
+    #ifdef _WIN32
+    WSADATA wsaData;
+    int res = WSAStartup(0x202, &wsaData);
+    if (doLog) {
+        outfile << "WSAStartup " << res << endl;
+        outfile.flush();
+    }
+    if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        if (doLog) {
+            outfile << "WSA Error: " << WSAGetLastError() << endl;
+            outfile.flush();
+        }
+        return false;
+    }
+    InetPtonA(AF_INET, serverAddr.c_str(), &ipOfServer.sin_addr.s_addr);
+    #else //_WIN32
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        if (doLog) {
+            outfile << "Cannot make socket!" << endl;
+            outfile.flush();
+        }
+        return false;
+    }
+    ipOfServer.sin_addr.s_addr = inet_addr(serverAddr.c_str());
+    #endif //_WIN32
+    ipOfServer.sin_family = AF_INET;
+    ipOfServer.sin_port = htons(serverPort);
+
+    if (doLog) {
+        outfile << "making connection to " << serverAddr << " on port "  << to_string(serverPort) << endl;
+        outfile.flush();
+    }
+    if(connect(sock, (struct sockaddr *)&ipOfServer, sizeof(ipOfServer)) < 0) {
+        if (doLog) {
+            outfile << "connection error" << endl;
+        }
+        //Explicitly close the sock, otherwise reconnection fails
+        disconnectServer();
+        return false;
+    }
+    if (doLog) {
+        outfile << "connection made" << endl;
+        outfile.flush();
+    }
+    return true;
 }
 
 RETURN_STATUS J2534_API PassThruOpen(char* pName, uint32_t* pDeviceID) {
@@ -162,16 +164,14 @@ RETURN_STATUS J2534_API PassThruOpen(char* pName, uint32_t* pDeviceID) {
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = ERR_FAILED;
 
-#ifndef _WIN32
+    #ifndef _WIN32
     readINI();
-#endif
+    #endif
 
     if (doLog) {
         outfile << "PassThruOpen()" << endl;
         outfile.flush();
     }
-    //*pDeviceID = 10;
-    //return 0;
 
     if (pName == NULL) {
         pCmd = (CommandPacket*)malloc(sizeof(CommandPacket));
@@ -292,7 +292,7 @@ RETURN_STATUS J2534_API PassThruStopMsgFilter(uint32_t ChannelID, uint32_t MsgID
     CommandPacket *pCmd = NULL;
     ReplyPacket *pReply = NULL;
     RETURN_STATUS result = RETURN_STATUS::ERR_FAILED;
-    
+
     if (doLog) {
         outfile << "PassThruStopMsgFilter(" << to_string(ChannelID) << "," << to_string(MsgID) << ")" << endl;
         outfile.flush();
@@ -391,7 +391,7 @@ RETURN_STATUS J2534_API PassThruGetLastError(char* pErrorDescription) {
 
     if (pReply != NULL) {
         result = pReply->result;
-        
+
         if(pErrorDescription != NULL)
             memcpy(pErrorDescription, (char*)(pReply->data), sizeof(PassThruGetLastErrorReply));
 
@@ -698,61 +698,61 @@ RETURN_STATUS J2534_API PassThruIoctl(uint32_t ChannelID, IOCTL_ID IoctlID, void
     //Placeholder pointers
     SCONFIG_LIST* pSConfigList = NULL;
     SBYTE_ARRAY* pSByteArray = NULL;
+
     if (doLog) {
         outfile << "PassThruIoctl(" << to_string(ChannelID) << "," << to_string(IoctlID) << ")" << endl;
         outfile.flush();
     }
 
     switch (IoctlID) {
-    case IOCTL_ID::GET_CONFIG:
-    case IOCTL_ID::SET_CONFIG:
-        //pInput = SCONFIG_LIST*
-        //pOutput = NULL
-        pSConfigList = (SCONFIG_LIST*)pInput;
-        cmdDataLen = sizeof(pSConfigList->NumOfParams) + (pSConfigList->NumOfParams * sizeof(SCONFIG));
-        if (doLog) {
-            outfile << "pInput:" << endl;
-            print_SCONFIG_LIST(pSConfigList);
-        }
-
-        break;
-    case IOCTL_ID::READ_VBATT:
-    case IOCTL_ID::READ_PROG_VOLTAGE:
-        //pInput = NULL;
-        //pOutput = uint32_t*;
-        break;
-    case IOCTL_ID::FIVE_BAUD_INIT:
-        //pInput = SBYTE_ARRAY*
-        //pOutput = SBYTE_ARRAY* Output always contains a 2 byte long SBYTE_ARRAY
-        pSByteArray = (SBYTE_ARRAY*)pInput;
-        cmdDataLen = sizeof(pSByteArray->NumOfBytes) + pSByteArray->NumOfBytes;
-        break;
-    case IOCTL_ID::FAST_INIT:
-        //pInput = PASSTHRU_MSG*
-        //pOutput = PASSTHRU_MSG*
-        cmdDataLen = sizeof(PASSTHRU_MSG);
-        if (doLog) {
-            outfile << "pInput:" << endl;
-            printPassThruMsg((PASSTHRU_MSG*)&pInput);
-        }
-        break;
-    case IOCTL_ID::CLEAR_TX_BUFFER:
-    case IOCTL_ID::CLEAR_RX_BUFFER:
-    case IOCTL_ID::CLEAR_PERIODIC_MSGS:
-    case IOCTL_ID::CLEAR_MSG_FILTERS:
-    case IOCTL_ID::CLEAR_FUNCT_MSG_LOOKUP_TABLE:
-        //pInput = NULL;
-        //pOutput = NULL;
-        break;
-    case IOCTL_ID::ADD_TO_FUNCT_MSG_LOOKUP_TABLE:
-    case IOCTL_ID::DELETE_FROM_FUNCT_MSG_LOOKUP_TABLE:
-        //pInput = SBYTE_ARRAY*;
-        //pOutput = NULL;
-        pSByteArray = (SBYTE_ARRAY*)pInput;
-        cmdDataLen = sizeof(pSByteArray->NumOfBytes) + pSByteArray->NumOfBytes;
-        break;
-    default:
-        return result;
+        case IOCTL_ID::GET_CONFIG:
+        case IOCTL_ID::SET_CONFIG:
+            //pInput = SCONFIG_LIST*
+            //pOutput = NULL
+            pSConfigList = (SCONFIG_LIST*)pInput;
+            cmdDataLen = sizeof(pSConfigList->NumOfParams) + (pSConfigList->NumOfParams * sizeof(SCONFIG));
+            if (doLog) {
+                outfile << "pInput:" << endl;
+                print_SCONFIG_LIST(pSConfigList);
+            }
+            break;
+        case IOCTL_ID::READ_VBATT:
+        case IOCTL_ID::READ_PROG_VOLTAGE:
+            //pInput = NULL;
+            //pOutput = uint32_t*;
+            break;
+        case IOCTL_ID::FIVE_BAUD_INIT:
+            //pInput = SBYTE_ARRAY*
+            //pOutput = SBYTE_ARRAY* Output always contains a 2 byte long SBYTE_ARRAY
+            pSByteArray = (SBYTE_ARRAY*)pInput;
+            cmdDataLen = sizeof(pSByteArray->NumOfBytes) + pSByteArray->NumOfBytes;
+            break;
+        case IOCTL_ID::FAST_INIT:
+            //pInput = PASSTHRU_MSG*
+            //pOutput = PASSTHRU_MSG*
+            cmdDataLen = sizeof(PASSTHRU_MSG);
+            if (doLog) {
+                outfile << "pInput:" << endl;
+                printPassThruMsg((PASSTHRU_MSG*)&pInput);
+            }
+            break;
+        case IOCTL_ID::CLEAR_TX_BUFFER:
+        case IOCTL_ID::CLEAR_RX_BUFFER:
+        case IOCTL_ID::CLEAR_PERIODIC_MSGS:
+        case IOCTL_ID::CLEAR_MSG_FILTERS:
+        case IOCTL_ID::CLEAR_FUNCT_MSG_LOOKUP_TABLE:
+            //pInput = NULL;
+            //pOutput = NULL;
+            break;
+        case IOCTL_ID::ADD_TO_FUNCT_MSG_LOOKUP_TABLE:
+        case IOCTL_ID::DELETE_FROM_FUNCT_MSG_LOOKUP_TABLE:
+            //pInput = SBYTE_ARRAY*;
+            //pOutput = NULL;
+            pSByteArray = (SBYTE_ARRAY*)pInput;
+            cmdDataLen = sizeof(pSByteArray->NumOfBytes) + pSByteArray->NumOfBytes;
+            break;
+        default:
+            return result;
     }
 
     pCmd = (CommandPacket*)malloc(sizeof(CommandPacket) + sizeof(PassThruIoctlCmd));
