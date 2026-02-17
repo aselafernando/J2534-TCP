@@ -24,6 +24,7 @@
 #include "J2534.h"
 #include "J2534_Server.h"
 
+#define SOCKET_TIMEOUT_SECONDS 5
 #define LISTEN_PORT 2534
 
 void on_client_connect(
@@ -45,15 +46,28 @@ int main(int argc, char* argv[])
 {
     sockaddr_in server_addr, client_addr;
     int result;
-#ifdef _WIN32
-    WSADATA wsa_data;
-    WSAStartup(MAKEWORD(2, 2), &wsa_data);
-#endif
+    #ifdef _WIN32
+        WSADATA wsa_data;
+        WSAStartup(MAKEWORD(2, 2), &wsa_data);
+    #endif
     const auto server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     const char* listenAddr = NULL;
     int listenPort = LISTEN_PORT;
     int c;
+    #ifdef _WIN32
+        DWORD timeout = SOCKET_TIMEOUT_SECONDS * 1000;
+        setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+    #else //_WIN32
+        struct timeval timeout;
+        timeout.tv_sec = SOCKET_TIMEOUT_SECONDS;
+        timeout.tv_usec = 0;
+        setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    #endif
 
+    /* Disabling output buffers */
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    
     while ((c = getopt(argc, argv, "l:p:mv")) != -1)
     {
         switch (c)
@@ -94,13 +108,13 @@ int main(int argc, char* argv[])
     }
 
     fprintf(stdout, "Loaded J2534 library\n");
-
+    
     if (listenAddr) {
-#ifdef _WIN32
-        InetPtonA(AF_INET, listenAddr, &server_addr.sin_addr.s_addr);
-#else
-        server_addr.sin_addr.s_addr = inet_addr(listenAddr);
-#endif
+        #ifdef _WIN32
+            InetPtonA(AF_INET, listenAddr, &server_addr.sin_addr.s_addr);
+        #else
+            server_addr.sin_addr.s_addr = inet_addr(listenAddr);
+        #endif
     } else {
         server_addr.sin_addr.s_addr = INADDR_ANY;
     }
@@ -108,8 +122,43 @@ int main(int argc, char* argv[])
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(listenPort);
 
-    ::bind(server, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
-    listen(server, 0);
+    result = ::bind(server, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
+    if (result != 0) {
+        if (listenAddr) {
+            #ifdef _WIN32
+                fprintf(stderr, "Unable to bind to port %s:%d! Error: %d\n", listenAddr, listenPort, WSAGetLastError());
+            #else
+                fprintf(stderr, "Unable to bind to port %s:%d! Error: %d\n", listenAddr, listenPort, result);
+            #endif
+        }
+        else {
+            #ifdef _WIN32
+                fprintf(stderr, "Unable to bind to port %d! Error: %d\n", listenPort, WSAGetLastError());
+            #else
+                fprintf(stderr, "Unable to bind to port %d! Error: %d\n", listenPort, result);
+            #endif
+        }
+        return result;
+    }
+
+    result = listen(server, 0);
+    if (result != 0) {
+        if (listenAddr) {
+            #ifdef _WIN32
+                fprintf(stderr, "Unable to listen to port %s:%d! Error: %d\n", listenAddr, listenPort, WSAGetLastError());
+            #else
+                fprintf(stderr, "Unable to listen to port %s:%d! Error: %d\n", listenAddr, listenPort, result);
+            #endif
+        }
+        else {
+            #ifdef _WIN32
+                fprintf(stderr, "Unable to listen to port %d! Error: %d\n", listenPort, WSAGetLastError());
+            #else
+                fprintf(stderr, "Unable to listen to port %d! Error: %d\n", listenPort, result);
+            #endif
+        }
+        return result;
+    }
 
     if (listenAddr) {
         fprintf(stdout, "Listening for incoming connections on %s:%d...\n", listenAddr, listenPort);
@@ -118,11 +167,11 @@ int main(int argc, char* argv[])
         fprintf(stdout, "Listening for incoming connections on port %d...\n", listenPort);
     }
 
-#ifdef _WIN32
-    int32_t client_addr_size = sizeof(client_addr);
-#else
-    uint32_t client_addr_size = sizeof(client_addr);
-#endif
+    #ifdef _WIN32
+        int32_t client_addr_size = sizeof(client_addr);
+    #else
+        uint32_t client_addr_size = sizeof(client_addr);
+    #endif
 
     while (stopServer == false)
     {
@@ -136,21 +185,21 @@ int main(int argc, char* argv[])
                 auto fut = async(launch::async, on_client_connect, client);
             }
         }
-#ifdef _WIN32
-        const auto last_error = WSAGetLastError();
+        #ifdef _WIN32
+            const auto last_error = WSAGetLastError();
 
-        if (last_error > 0)
-        {
-            fprintf(stderr, "WSA Error: %d\n", last_error);
-        }
-#endif
+            if (last_error > 0)
+            {
+                fprintf(stderr, "WSA Error: %d\n", last_error);
+            }
+        #endif
     }
 
-#ifdef _WIN32
-    closesocket(server);
-#else
-    close(server);
-#endif
+    #ifdef _WIN32
+        closesocket(server);
+    #else
+        close(server);
+    #endif
 
     fprintf(stdout, "Server stopped listening\n");
 
@@ -187,9 +236,9 @@ void on_client_connect(SOCKET client)
                 fprintf(stdout, "Read %d bytes\n", readLen);
 
             if (readLen <= 0) {
-#ifdef _WIN32
-                fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
-#endif
+                #ifdef _WIN32
+                    fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
+                #endif
                 goto disconnect;
             }
         }
@@ -205,9 +254,9 @@ void on_client_connect(SOCKET client)
                 if (verbose)
                     fprintf(stdout, "Read %d bytes\n", readLen);
                 if (readLen <= 0) {
-#ifdef _WIN32
-                    fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
-#endif
+                    #ifdef _WIN32
+                        fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
+                    #endif
                     goto disconnect;
                 }
             }
@@ -223,9 +272,9 @@ void on_client_connect(SOCKET client)
                     if (verbose)
                         fprintf(stdout, "sentLen %d\n", sentLen);
                     if (sentLen <= 0) {
-#ifdef _WIN32
-                        fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
-#endif
+                        #ifdef _WIN32
+                            fprintf(stderr, "WSA Error: %d\n", WSAGetLastError());
+                        #endif
                         goto disconnect;
                     }
                 }
@@ -248,11 +297,11 @@ void on_client_connect(SOCKET client)
 disconnect:
     if (cmd) free(cmd);
     if (reply) free(reply);
-#ifdef _WIN32
-    closesocket(client);
-#else
-    close(client);
-#endif
+    #ifdef _WIN32
+        closesocket(client);
+    #else
+        close(client);
+    #endif
     fprintf(stdout, "Client disconnected.\n");
     return;
 }
