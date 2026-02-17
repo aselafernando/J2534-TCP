@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <sys/types.h>
 
+#define SOCKET_TIMEOUT_SECONDS 5
+
 static SOCKET sock = INVALID_SOCKET;
 
 static void printPassThruMsg(PASSTHRU_MSG* msg) {
@@ -28,6 +30,80 @@ static void print_SCONFIG_LIST(SCONFIG_LIST* sl) {
     outfile.flush();
 }
 
+static void disconnectServer() {
+    if (doLog) {
+        outfile << "disconnectServer()" << endl;
+        outfile.flush();
+    }
+    #ifdef _WIN32
+        WSACleanup();
+        closesocket(sock);
+    #else //_WIN32
+        close(sock);
+    #endif //_WIN32
+    sock = INVALID_SOCKET;
+}
+
+static bool connectToServer() {
+    struct sockaddr_in ipOfServer;
+    #ifdef _WIN32
+        DWORD timeout = SOCKET_TIMEOUT_SECONDS * 1000;
+        WSADATA wsaData;
+        int res = WSAStartup(0x202, &wsaData);
+
+        if (doLog) {
+            outfile << "WSAStartup " << res << endl;
+            outfile.flush();
+        }
+
+        if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+            if (doLog) {
+                outfile << "WSA Error: " << WSAGetLastError() << endl;
+                outfile.flush();
+            }
+            return false;
+        }
+
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+        InetPtonA(AF_INET, serverAddr.c_str(), &ipOfServer.sin_addr.s_addr);
+    #else //_WIN32
+        struct timeval timeout;
+        timeout.tv_sec = SOCKET_TIMEOUT_SECONDS;
+        timeout.tv_usec = 0;
+
+        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+            if (doLog) {
+                outfile << "Cannot make socket!" << endl;
+                outfile.flush();
+            }
+            return false;
+        }
+
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        ipOfServer.sin_addr.s_addr = inet_addr(serverAddr.c_str());
+    #endif //_WIN32
+    
+    ipOfServer.sin_family = AF_INET;
+    ipOfServer.sin_port = htons(serverPort);
+
+    if (doLog) {
+        outfile << "making connection to " << serverAddr << " on port "  << to_string(serverPort) << endl;
+        outfile.flush();
+    }
+    if(connect(sock, (struct sockaddr *)&ipOfServer, sizeof(ipOfServer)) < 0) {
+        if (doLog) {
+            outfile << "connection error" << endl;
+        }
+        disconnectServer();
+        return false;
+    }
+    if (doLog) {
+        outfile << "connection made" << endl;
+        outfile.flush();
+    }
+    return true;
+}
+
 static void sendData(uint8_t* pData, uint32_t len) {
     uint32_t i;
     int sentLen;
@@ -39,6 +115,7 @@ static void sendData(uint8_t* pData, uint32_t len) {
             outfile.flush();
         }
         if (sentLen <= 0) {
+            disconnectServer();
             break;
         }
     }
@@ -49,7 +126,7 @@ static ReplyPacket* getReply() {
     int readLen;
     uint32_t replyLen;
     ReplyPacket* pReply = NULL;
-
+    
     for(i = 0; i < sizeof(replyLen); i += readLen) {
         readLen = recv(sock, (char*)&replyLen + i, sizeof(replyLen) - i, 0);
         if (doLog) {
@@ -57,6 +134,8 @@ static ReplyPacket* getReply() {
             outfile.flush();
         }
         if(readLen <= 0) {
+            //Disconnect Server if there is a read error
+            disconnectServer();
             return NULL;
         }
     }
@@ -77,6 +156,8 @@ static ReplyPacket* getReply() {
                 outfile.flush();
             }
             if(readLen <= 0) {
+                //Disconnect Server if there is a read error
+                disconnectServer();
                 return pReply;
             }
         }
@@ -94,69 +175,6 @@ static ReplyPacket* sendAndReply(CommandPacket* pCmd) {
 
     sendData((uint8_t*)pCmd, pCmd->len);
     return getReply();
-}
-
-static void disconnectServer() {
-    if (doLog) {
-        outfile << "disconnectServer()" << endl;
-        outfile.flush();
-    }
-    #ifdef _WIN32
-    WSACleanup();
-    closesocket(sock);
-    #else //_WIN32
-    close(sock);
-    #endif //_WIN32
-    sock = INVALID_SOCKET;
-}
-
-static bool connectToServer() {
-    struct sockaddr_in ipOfServer;
-    #ifdef _WIN32
-    WSADATA wsaData;
-    int res = WSAStartup(0x202, &wsaData);
-    if (doLog) {
-        outfile << "WSAStartup " << res << endl;
-        outfile.flush();
-    }
-    if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-        if (doLog) {
-            outfile << "WSA Error: " << WSAGetLastError() << endl;
-            outfile.flush();
-        }
-        return false;
-    }
-    InetPtonA(AF_INET, serverAddr.c_str(), &ipOfServer.sin_addr.s_addr);
-    #else //_WIN32
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        if (doLog) {
-            outfile << "Cannot make socket!" << endl;
-            outfile.flush();
-        }
-        return false;
-    }
-    ipOfServer.sin_addr.s_addr = inet_addr(serverAddr.c_str());
-    #endif //_WIN32
-    ipOfServer.sin_family = AF_INET;
-    ipOfServer.sin_port = htons(serverPort);
-
-    if (doLog) {
-        outfile << "making connection to " << serverAddr << " on port "  << to_string(serverPort) << endl;
-        outfile.flush();
-    }
-    if(connect(sock, (struct sockaddr *)&ipOfServer, sizeof(ipOfServer)) < 0) {
-        if (doLog) {
-            outfile << "connection error" << endl;
-        }
-        //Explicitly close the sock, otherwise reconnection fails
-        disconnectServer();
-        return false;
-    }
-    if (doLog) {
-        outfile << "connection made" << endl;
-        outfile.flush();
-    }
-    return true;
 }
 
 RETURN_STATUS J2534_API PassThruOpen(char* pName, uint32_t* pDeviceID) {
