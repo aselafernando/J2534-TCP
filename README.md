@@ -1,7 +1,6 @@
 # J2534-TCP
 
-This project builds a client and a server in order to share a J2534 library over a TCP/IP connection.
-The primary reason I created this was toto share a proprietary J2534 DLL with a Linux program using Wine.
+This project builds a client and a server in order to share a J2534 library over a TCP/IP connection. It acts as a proxy so the vehicle interface module does not necesarily have to be on the same computer as the client software. In addition this allows a J2534.DLL to be loaded in Wine and a Linux program can then interface with this DLL over TCP/IP.
 
 ---
 
@@ -42,7 +41,7 @@ Open `J2534_TCP.sln` in Visual Studio. The targets available are
 
 ### Client
 
-The client build output is a library (libJ2534.so for Linux or J2534.dll for Windows) and is designed to connect to the server in this repository.
+The client build output is a library (libJ2534.so for Linux or J2534_TCP.dll for Windows) and is designed to connect to the server in this repository.
 It is currently hardcoded to seek a server on 127.0.0.1:2534. This is defined in `client/dllmain.cpp`
 
 ### Server
@@ -60,7 +59,7 @@ It is currently hardcoded to seek a server on 127.0.0.1:2534. This is defined in
 All communication over TCP/IP is transparent to the client application. In the eyes of the client it's exactly the same as if the vehicle interface cable is connected directly, but thanks to TCP/IP it may be another computer somewhere on a network.
 
 ### Client
-The desired program will load the client library (libJ2534.so in Linux or J2534.dll in Windows). The client library should be renamed to whatever the program expects it to be.
+The desired program will load the client library (libJ2534.so in Linux or J2534_TCP.dll in Windows). The client library should be renamed to whatever the program expects it to be.
 
 Upon the program calling `PassThruOpen()` a TCP connection will be initiated to the server on 127.0.0.1:2534
 
